@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>番茄钟</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── 配色（来自截图） ──────────────────────────────────── */
+  :root {
+    --primary:   #C65A4A;
+    --bg:        #F7F2EC;
+    --aux:       #EAE3DB;
+    --aux-light: #F1E8E0;
+    --highlight: #F8DCCF;
+    --muted:     #D9D2CC;
+    --text:      #6F655E;
+    --divider:   #E5E0DA;
+
+    /* 模式强调色 */
+    --accent:    #C65A4A;
+    --accent-lt: #F4C5BB;
+
+    --trans: .35s cubic-bezier(.4,0,.2,1);
+  }
+
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    color: var(--text);
+    transition: background var(--trans);
+  }
+
+  /* ── 卡片 ───────────────────────────────────────────── */
+  .card {
+    background: #fff;
+    border-radius: 28px;
+    padding: 36px 44px 40px;
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 2px 6px rgba(111,101,94,.06),
+                0 12px 40px rgba(111,101,94,.1);
+  }
+
+  /* ── 模式标签 ────────────────────────────────────────── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--aux-light);
+    border-radius: 100px;
+    padding: 4px;
+    margin-bottom: 34px;
+  }
+  .tab {
+    padding: 7px 18px;
+    border-radius: 100px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--trans), color var(--trans), box-shadow var(--trans);
+    white-space: nowrap;
+  }
+  .tab.active {
+    background: #fff;
+    color: var(--accent);
+    box-shadow: 0 1px 6px rgba(111,101,94,.14);
+    font-weight: 600;
+  }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── 环形进度 ─────────────────────────────────────────── */
+  .ring-wrap {
+    position: relative;
+    width: 210px;
+    height: 210px;
+    margin-bottom: 30px;
+  }
+  .ring-wrap svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: 100%;
+  }
+  .ring-track { fill: none; stroke: var(--aux); stroke-width: 9; }
+  .ring-fill  {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 9;
+    stroke-linecap: round;
+    transition: stroke-dashoffset var(--trans), stroke .35s;
+  }
+  .ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .timer-display {
+    font-size: 54px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    font-family: "Consolas", monospace;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .phase-label {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── 主按钮 ────────────────────────────────────────────── */
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .btn {
+    border: none;
+    border-radius: 100px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .2s, background .2s, color .2s;
+    font-weight: 600;
+  }
+  .btn:active { transform: scale(.96); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 46px;
+    letter-spacing: .5px;
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 40%, transparent);
+    min-width: 134px;
+  }
+  .btn-primary:hover {
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 55%, transparent);
+    filter: brightness(1.06);
+  }
+
+  .btn-secondary {
+    background: var(--aux-light);
+    color: var(--text);
+    padding: 14px 22px;
+  }
+  .btn-secondary:hover { background: var(--aux); }
+
+  /* ── 分隔线 ─────────────────────────────────────────────── */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--divider);
+    margin-bottom: 20px;
+  }
+
+  /* ── 底部统计 ────────────────────────────────────────────── */
+  .stats {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .dots { display: flex; gap: 8px; }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--aux);
+    transition: background .3s, transform .2s;
+  }
+  .dot.filled {
+    background: var(--accent-lt);
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    transform: scale(1.2);
+  }
+  .count-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .count-num {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 15px;
+  }
+
+  /* ── Toast ──────────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    top: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-70px);
+    background: var(--text);
+    color: #fff;
+    padding: 11px 26px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .3px;
+    transition: transform .35s cubic-bezier(.4,0,.2,1);
+    z-index: 999;
+    white-space: nowrap;
+    box-shadow: 0 4px 18px rgba(111,101,94,.22);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── 完成脉冲 ───────────────────────────────────────────── */
+  @keyframes pulse {
+    0%,100% { transform: scale(1); }
+    50%      { transform: scale(1.05); }
+  }
+  .ring-wrap.done { animation: pulse .45s ease 3; }
+
+  /* ── 模式主题变量 ────────────────────────────────────────── */
+  body.mode-work  { --accent: #C65A4A; --accent-lt: #F4C5BB; }
+  body.mode-short { --accent: #7A9F8E; --accent-lt: #BDD8CE; }
+  body.mode-long  { --accent: #6E8FA8; --accent-lt: #B8CDD9; }
+</style>
+</head>
+<body class="mode-work">
+
+<div class="toast" id="toast"></div>
+
+<div class="card">
+  <!-- 模式标签 -->
+  <div class="tabs">
+    <button class="tab active" data-mode="work">专注</button>
+    <button class="tab"        data-mode="short">短休息</button>
+    <button class="tab"        data-mode="long">长休息</button>
+  </div>
+
+  <!-- 环形计时器 -->
+  <div class="ring-wrap" id="ringWrap">
+    <svg viewBox="0 0 210 210">
+      <circle class="ring-track" cx="105" cy="105" r="91"/>
+      <circle class="ring-fill"  cx="105" cy="105" r="91" id="ringFill"/>
+    </svg>
+    <div class="ring-center">
+      <div class="timer-display" id="timerDisplay">25:00</div>
+      <div class="phase-label"   id="phaseLabel">专注</div>
+    </div>
+  </div>
+
+  <!-- 控制 -->
+  <div class="controls">
+    <button class="btn btn-primary"   id="startBtn"  onclick="toggleTimer()">开始</button>
+    <button class="btn btn-secondary" onclick="resetTimer()">重置</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 统计 -->
+  <div class="stats">
+    <div class="dots" id="dots"></div>
+    <div class="count-row">
+      今日完成&nbsp;<span class="count-num" id="countDisplay">0</span>&nbsp;个番茄
+    </div>
+  </div>
+</div>
+
+<script>
+const CONFIG = {
+  work:  { minutes: 25, label: "专注",   cls: "mode-work"  },
+  short: { minutes: 5,  label: "短休息", cls: "mode-short" },
+  long:  { minutes: 15, label: "长休息", cls: "mode-long"  },
+};
+const INTERVAL = 4;
+
+let mode      = "work";
+let running   = false;
+let remaining = 25 * 60;
+let total     = 25 * 60;
+let pomodoros = 0;
+let timerId   = null;
+
+const CIRC = 2 * Math.PI * 91;
+const ringFill = document.getElementById("ringFill");
+ringFill.style.strokeDasharray  = CIRC;
+ringFill.style.strokeDashoffset = 0;
+
+function tick() {
+  if (remaining > 0) { remaining--; render(); }
+  else { onFinish(); }
+}
+
+function toggleTimer() {
+  if (running) {
+    clearInterval(timerId); running = false;
+    document.getElementById("startBtn").textContent = "继续";
+  } else {
+    running = true;
+    document.getElementById("startBtn").textContent = "暂停";
+    timerId = setInterval(tick, 1000);
+  }
+}
+
+function resetTimer() {
+  clearInterval(timerId); running = false;
+  remaining = total;
+  document.getElementById("startBtn").textContent = "开始";
+  render();
+}
+
+function switchMode(m) {
+  clearInterval(timerId); running = false;
+  mode      = m;
+  total     = CONFIG[m].minutes * 60;
+  remaining = total;
+
+  document.body.className = CONFIG[m].cls;
+  document.querySelectorAll(".tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.mode === m));
+  document.getElementById("phaseLabel").textContent = CONFIG[m].label;
+  document.getElementById("startBtn").textContent = "开始";
+  render();
+}
+
+function onFinish() {
+  clearInterval(timerId); running = false;
+  const rw = document.getElementById("ringWrap");
+  rw.classList.add("done");
+  setTimeout(() => rw.classList.remove("done"), 1400);
+  playBeep();
+
+  if (mode === "work") {
+    pomodoros++;
+    document.getElementById("countDisplay").textContent = pomodoros;
+    showToast("专注结束，休息一下 ☕");
+    setTimeout(() => switchMode(pomodoros % INTERVAL === 0 ? "long" : "short"), 800);
+  } else {
+    showToast("休息结束，继续专注！");
+    setTimeout(() => switchMode("work"), 800);
+  }
+}
+
+function render() {
+  const m = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const s = String(remaining % 60).padStart(2, "0");
+  document.getElementById("timerDisplay").textContent = `${m}:${s}`;
+  document.title = `${m}:${s} — ${CONFIG[mode].label}`;
+  ringFill.style.strokeDashoffset = CIRC * (remaining / total);
+
+  const filled = pomodoros % INTERVAL;
+  const container = document.getElementById("dots");
+  if (container.children.length !== INTERVAL) {
+    container.innerHTML = "";
+    for (let i = 0; i < INTERVAL; i++) {
+      const d = document.createElement("div");
+      d.className = "dot";
+      container.appendChild(d);
+    }
+  }
+  [...container.children].forEach((d, i) =>
+    d.classList.toggle("filled", i < filled));
+}
+
+let audioCtx = null;
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, .28, .56].forEach(t => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.value = 830; o.type = "sine";
+      g.gain.setValueAtTime(0,   audioCtx.currentTime + t);
+      g.gain.linearRampToValueAtTime(.35, audioCtx.currentTime + t + .01);
+      g.gain.linearRampToValueAtTime(0,   audioCtx.currentTime + t + .2);
+      o.start(audioCtx.currentTime + t);
+      o.stop(audioCtx.currentTime  + t + .22);
+    });
+  } catch(e) {}
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+document.querySelectorAll(".tab").forEach(t =>
+  t.addEventListener("click", () => switchMode(t.dataset.mode)));
+
+render();
+</script>
+</body>
+</html>
